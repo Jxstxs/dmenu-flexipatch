@@ -300,7 +300,7 @@
  * the TSV patch.
  * https://tools.suckless.org/dmenu/patches/separator/
  */
-#define SEPARATOR_PATCH 0
+#define SEPARATOR_PATCH 1
 
 /* This patch allows the symbols, which are printed in dmenu to indicate that either the input
  * is too long or there are too many options to be shown in dmenu in one line, to be defined.
