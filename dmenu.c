@@ -687,7 +687,11 @@ drawmenu(void)
 	}
 	#if NUMBERS_PATCH
 	drw_setscheme(drw, scheme[SchemeNorm]);
+	#if PANGO_PATCH
+	drw_text(drw, mw - rpad, 0, TEXTW(numbers), bh, lrpad / 2, numbers, 0, False);
+	#else
 	drw_text(drw, mw - rpad, 0, TEXTW(numbers), bh, lrpad / 2, numbers, 0);
+	#endif // PANGO_PATCH
 	#endif // NUMBERS_PATCH
 	drw_map(drw, win, 0, 0, mw, mh);
 	#if NON_BLOCKING_STDIN_PATCH
@@ -941,12 +945,12 @@ movewordedge(int dir)
 static void
 keypress(XKeyEvent *ev)
 {
-	char buf[32];
+	char buf[64];
 	int len;
 	#if PREFIXCOMPLETION_PATCH
 	struct item * item;
 	#endif // PREFIXCOMPLETION_PATCH
-	KeySym ksym;
+	KeySym ksym = NoSymbol;
 	Status status;
 	#if GRID_PATCH && GRIDNAV_PATCH
 	int i;
@@ -958,10 +962,10 @@ keypress(XKeyEvent *ev)
 	switch (status) {
 	default: /* XLookupNone, XBufferOverflow */
 		return;
-	case XLookupChars:
+	case XLookupChars: /* composed string from input method */
 		goto insert;
 	case XLookupKeySym:
-	case XLookupBoth:
+	case XLookupBoth: /* a KeySym and a string are returned: use keysym */
 		break;
 	}
 
@@ -1424,8 +1428,7 @@ readstdin(void)
 	char *buf, *p;
 	#endif // SEPARATOR_PATCH | TSV_PATCH
 
-	size_t size = 0;
-	size_t i, junk;
+	size_t i, linesiz, itemsiz = 0;
 	ssize_t len;
 
 	#if PASSWORD_PATCH
@@ -1436,14 +1439,17 @@ readstdin(void)
 	#endif // PASSWORD_PATCH
 
 	/* read each line from stdin and add it to the item list */
-	for (i = 0; (len = getline(&line, &junk, stdin)) != -1; i++, line = NULL) {
-		if (i + 1 >= size / sizeof *items)
-			if (!(items = realloc(items, (size += BUFSIZ))))
-				die("cannot realloc %zu bytes:", size);
+	for (i = 0; (len = getline(&line, &linesiz, stdin)) != -1; i++) {
+		if (i + 1 >= itemsiz) {
+			itemsiz += 256;
+			if (!(items = realloc(items, itemsiz * sizeof(*items))))
+				die("cannot realloc %zu bytes:", itemsiz * sizeof(*items));
+		}
 		if (line[len - 1] == '\n')
 			line[len - 1] = '\0';
 
-		items[i].text = line;
+		if (!(items[i].text = strdup(line)))
+			die("strdup:");
 		#if SEPARATOR_PATCH
 		if (separator && (p = separator_greedy ?
 			strrchr(items[i].text, separator) : strchr(items[i].text, separator))) {
@@ -1479,6 +1485,7 @@ readstdin(void)
 		items[i].hp = arrayhas(hpitems, hplength, items[i].text);
 		#endif // HIGHPRIORITY_PATCH
 	}
+	free(line);
 	if (items)
 		items[i].text = NULL;
 	lines = MIN(lines, i);
@@ -1734,7 +1741,7 @@ setup(void)
 		#endif // MOUSE_SUPPORT_PATCH
 	;
 	win = XCreateWindow(
-		dpy, parentwin,
+		dpy, root,
 		#if BARPADDING_PATCH && BORDER_PATCH
 		x + sp, y + vp - (topbar ? 0 : border_width * 2), mw - 2 * sp - border_width * 2, mh, border_width,
 		#elif BARPADDING_PATCH
@@ -1783,6 +1790,7 @@ setup(void)
 
 	XMapRaised(dpy, win);
 	if (embed) {
+		XReparentWindow(dpy, win, parentwin, x, y);
 		XSelectInput(dpy, parentwin, FocusChangeMask | SubstructureNotifyMask);
 		if (XQueryTree(dpy, parentwin, &dw, &w, &dws, &du) && dws) {
 			for (i = 0; i < du && dws[i] != win; ++i)
