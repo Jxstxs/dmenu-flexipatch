@@ -4,7 +4,7 @@ static int opacity = 1;
 static int fuzzy = 1;
 static int center = 1;
 static int min_width = 500;
-static char *fonts[] = {"monospace:size=10"};
+static char *fonts[] = {"Monocraft Nerd Font:size=10:antializing=true:autohint=true"};
 
 static const char *prompt = NULL;
 
